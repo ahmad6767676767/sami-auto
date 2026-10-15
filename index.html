@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Moto X3M Ultra - Cloudflare Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0f19;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: #fff;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #0f172a 0%, #020617 100%);
+        }
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.12);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: transform 0.05s, background 0.1s;
+        }
+        .touch-btn:active {
+            transform: scale(0.92);
+            background: rgba(245, 158, 11, 0.4);
+            border-color: #f59e0b;
+        }
+        /* Custom scrollbar for bike selector */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #f59e0b;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="relative w-full h-full">
+
+    <div id="game-container" class="relative w-full h-full">
+        <!-- Canvas Game World -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- HUD Layer -->
+        <div id="hud-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none flex flex-col justify-between p-4 md:p-6 z-10">
+            <!-- Top HUD Bar -->
+            <div class="flex justify-between items-center w-full">
+                <div class="flex items-center gap-3">
+                    <div class="bg-slate-900/80 backdrop-blur border border-slate-700/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+                        <span class="text-amber-500 font-black text-xs md:text-sm uppercase tracking-wider">Score</span>
+                        <span id="score-val" class="font-bold text-lg md:text-xl text-white">0</span>
+                    </div>
+                    <div class="bg-slate-900/80 backdrop-blur border border-slate-700/50 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-lg">
+                        <span class="text-amber-500 font-black text-xs md:text-sm uppercase tracking-wider">Time</span>
+                        <span id="time-val" class="font-bold text-lg md:text-xl text-white">0.0s</span>
+                    </div>
+                </div>
+
+                <!-- Right Side Info & Audio Booster HUD -->
+                <div class="flex items-center gap-2 pointer-events-auto">
+                    <button id="audio-boost-btn" class="bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/50 text-amber-400 font-bold text-xs px-3 py-2 rounded-xl backdrop-blur transition flex items-center gap-1">
+                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                        <span>BOOST: <strong id="boost-val" class="text-white">2.5x</strong></span>
+                    </button>
+                    <button id="mute-btn" class="bg-slate-900/80 border border-slate-700/50 text-white p-2 rounded-xl backdrop-blur hover:bg-slate-800 transition">
+                        🔊
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Touch Controls Overlay -->
+            <div id="mobile-controls" class="w-full flex justify-between items-end pb-2 pointer-events-auto md:hidden">
+                <!-- Left Side: Rotation / Tilt Controls -->
+                <div class="flex gap-4">
+                    <button id="btn-left" class="touch-btn w-16 h-16 text-2xl">↺</button>
+                    <button id="btn-right" class="touch-btn w-16 h-16 text-2xl">↻</button>
+                </div>
+                
+                <!-- Center: Slow Motion -->
+                <div>
+                    <button id="btn-slomo" class="touch-btn w-14 h-14 bg-purple-500/30 border-purple-400 text-xs font-bold uppercase tracking-wider text-purple-300">SLOW</button>
+                </div>
+
+                <!-- Right Side: Gas & Brake Controls -->
+                <div class="flex gap-4">
+                    <button id="btn-brake" class="touch-btn w-16 h-16 text-2xl bg-red-500/20 border-red-400/50">↓</button>
+                    <button id="btn-gas" class="touch-btn w-16 h-16 text-2xl bg-amber-500/20 border-amber-400/50">↑</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Start / Garage Menu Modal -->
+        <div id="main-menu" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-20 flex flex-col justify-between p-6 md:p-10 overflow-y-auto">
+            <!-- Header Title -->
+            <div class="text-center mt-4">
+                <h1 class="text-4xl md:text-6xl font-black italic tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 drop-shadow-lg">
+                    MOTO X3M ULTRA
+                </h1>
+                <p class="text-slate-400 text-sm md:text-base mt-1 font-medium">Cloudflare Edition • 40+ Bike Roster & Beats</p>
+            </div>
+
+            <!-- Center Content: Bike Roster & Customizer -->
+            <div class="my-6 max-w-4xl mx-auto w-full bg-slate-900/60 border border-slate-800 rounded-3xl p-4 md:p-6 shadow-2xl">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4 pb-3 border-b border-slate-800 gap-2">
+                    <h2 class="text-lg font-bold text-amber-400 uppercase tracking-wide flex items-center gap-2">
+                        <span>🏍️</span> Select Motorbike (40 Available)
+                    </h2>
+                    <span id="selected-bike-title" class="text-xs md:text-sm font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full">
+                        Bike #1 - Sport Classic
+                    </span>
+                </div>
+
+                <!-- Bike Cards Grid -->
+                <div id="bike-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 max-h-60 overflow-y-auto pr-1">
+                    <!-- Cards dynamically generated via JS -->
+                </div>
+
+                <!-- Custom Sound Loader Section -->
+                <div class="mt-6 pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
+                            🎵
+                        </div>
+                        <div>
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider">Umar Samuel Beat Engine</h3>
+                            <p class="text-[11px] text-slate-400">Synthesized High-Sound Bassline (2.5x Boost Active)</p>
+                        </div>
+                    </div>
+                    
+                    <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold px-4 py-2 rounded-xl transition shadow">
+                        <span>📂 Custom Song MP3</span>
+                        <input type="file" id="mp3-file-input" accept="audio/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Start Race Button -->
+            <div class="text-center mb-4">
+                <button id="start-game-btn" class="w-full max-w-md mx-auto py-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xl uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/30 transform hover:-translate-y-1 transition active:translate-y-0">
+                    START RACE 🚀
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div id="game-over-modal" class="hidden absolute inset-0 bg-slate-950/95 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 text-center">
+            <div class="w-20 h-20 bg-red-500/20 border-2 border-red-500 rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">
+                💥
+            </div>
+            <h2 class="text-4xl md:text-5xl font-black text-red-500 uppercase tracking-widest mb-2">CRASHED!</h2>
+            <p class="text-slate-400 text-sm mb-6">You lost control of the motorbike!</p>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-xs mb-8 shadow-xl">
+                <div class="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Final Score</div>
+                <div id="final-score-val" class="text-3xl font-black text-amber-400">0</div>
+            </div>
+
+            <button id="retry-btn" class="w-full max-w-xs py-4 bg-gradient-to-r from-red-500 to-amber-500 hover:from-red-400 hover:to-amber-400 text-slate-950 font-black text-lg uppercase tracking-wider rounded-2xl shadow-lg shadow-red-500/30 transition">
+                RETRY RACE 🔄
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* --- 1. UMAR SAMUEL HIGH-VOLUME BEAT ENGINE --- */
+        class UmarSamuelAudioSynth {
+            constructor() {
+                this.ctx = null;
+                this.isPlaying = false;
+                this.tempo = 128;
+                this.step = 0;
+                this.nextNoteTime = 0;
+                this.gainBoostFactor = 2.5; // High Volume Boost
+                this.masterGain = null;
+                this.isMuted = false;
+                this.customAudioBuffer = null;
+                this.customSource = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.setValueAtTime(this.gainBoostFactor, this.ctx.currentTime);
+                    this.masterGain.connect(this.ctx.destination);
+                }
+            }
+
+            start() {
+                this.init();
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+                this.isPlaying = true;
+                
+                if (this.customAudioBuffer) {
+                    this.playCustomTrack();
+                } else {
+                    this.nextNoteTime = this.ctx.currentTime;
+                    this.scheduler();
+                }
+            }
+
+            stop() {
+                this.isPlaying = false;
+                if (this.customSource) {
+                    try { this.customSource.stop(); } catch(e) {}
+                }
+            }
+
+            setGainBoost(factor) {
+                this.gainBoostFactor = factor;
+                if (this.masterGain && !this.isMuted) {
+                    this.masterGain.gain.setValueAtTime(this.gainBoostFactor, this.ctx.currentTime);
+                }
+            }
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                if (this.masterGain) {
+                    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.gainBoostFactor, this.ctx.currentTime);
+                }
+                return this.isMuted;
+            }
+
+            scheduler() {
+                while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
+                    this.playBeatStep(this.step, this.nextNoteTime);
+                    this.nextStep();
+                }
+                if (this.isPlaying && !this.customAudioBuffer) {
+                    setTimeout(() => this.scheduler(), 30);
+                }
+            }
+
+            nextStep() {
+                const secondsPerBeat = 60.0 / this.tempo;
+                this.nextNoteTime += 0.25 * secondsPerBeat;
+                this.step = (this.step + 1) % 16;
+            }
+
+            playBeatStep(step, time) {
+                if (this.isMuted) return;
+
+                // Heavy Sub-Kick Drum
+                if (step % 4 === 0) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(160, time);
+                    osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.18);
+                    gain.gain.setValueAtTime(0.9, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.18);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start(time);
+                    osc.stop(time + 0.18);
+                }
+
+                // Umar Samuel Dancehall Snare/Clap
+                if (step % 8 === 4 || step === 14) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(280, time);
+                    gain.gain.setValueAtTime(0.5, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start(time);
+                    osc.stop(time + 0.15);
+                }
+
+                // Synth Bass Line
+                if (step % 2 === 0) {
+                    const notes = [65.41, 65.41, 77.78, 65.41, 58.27, 65.41, 73.42, 65.41]; // C2, Eb2, Bb1 bass synth pattern
+                    const freq = notes[(step / 2) % notes.length];
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, time);
+                    gain.gain.setValueAtTime(0.35, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.12);
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    osc.start(time);
+                    osc.stop(time + 0.12);
+                }
+            }
+
+            loadCustomMP3(file) {
+                this.init();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.ctx.decodeAudioData(e.target.result, (buffer) => {
+                        this.customAudioBuffer = buffer;
+                        if (this.isPlaying) {
+                            this.playCustomTrack();
+                        }
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            playCustomTrack() {
+                if (this.customSource) {
+                    try { this.customSource.stop(); } catch(e) {}
+                }
+                this.customSource = this.ctx.createBufferSource();
+                this.customSource.buffer = this.customAudioBuffer;
+                this.customSource.loop = true;
+                this.customSource.connect(this.masterGain);
+                this.customSource.start(0);
+            }
+        }
+
+        /* --- 2. 40+ MOTORBIKE ROSTER GENERATOR --- */
+        const bikes = [];
+        const colorPalette = ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+        for (let i = 1; i <= 40; i++) {
+            bikes.push({
+                id: i,
+                name: `Bike #${i}`,
+                color: colorPalette[(i - 1) % colorPalette.length],
+                accel: 0.18 + (i * 0.004),
+                maxSpeed: 8 + (i * 0.12),
+                rotSpeed: 0.055 + (i * 0.001)
+            });
+        }
+
+        /* --- 3. GAME ENGINE & CANVAS LOGIC --- */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const audioSynth = new UmarSamuelAudioSynth();
+
+        let selectedBike = bikes[0];
+        let gameState = 'MENU';
+        let score = 0;
+        let startTime = 0;
+        let isSlowMo = false;
+
+        // Controls
+        const keys = { up: false, down: false, left: false, right: false, slomo: false };
+
+        // Bike Physics Object
+        const player = {
+            x: 100,
+            y: 300,
+            vx: 0,
+            vy: 0,
+            angle: 0,
+            angularVelocity: 0,
+            grounded: false
+        };
+
+        // Resize Canvas dynamically
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Render Bike Roster Grid
+        const bikeGrid = document.getElementById('bike-grid');
+        bikes.forEach((bike) => {
+            const card = document.createElement('div');
+            card.className = `p-2 rounded-xl bg-slate-800/60 border ${bike.id === 1 ? 'border-amber-500 bg-amber-500/10' : 'border-slate-700/50'} text-center cursor-pointer hover:border-amber-400 transition flex flex-col items-center justify-center`;
+            card.innerHTML = `
+                <div class="w-6 h-3 rounded-md mb-1 shadow" style="background-color: ${bike.color}"></div>
+                <span class="text-[10px] font-bold text-slate-300">#${bike.id}</span>
+            `;
+            card.onclick = () => {
+                document.querySelectorAll('#bike-grid > div').forEach(c => {
+                    c.classList.remove('border-amber-500', 'bg-amber-500/10');
+                    c.classList.add('border-slate-700/50');
+                });
+                card.classList.add('border-amber-500', 'bg-amber-500/10');
+                selectedBike = bike;
+                document.getElementById('selected-bike-title').innerText = `Bike #${bike.id} - Speed: ${bike.maxSpeed.toFixed(1)}`;
+            };
+            bikeGrid.appendChild(card);
+        });
+
+        // Terrain Elevation Function
+        function getTerrainY(x) {
+            return Math.sin(x * 0.004) * 90 + Math.cos(x * 0.01) * 45 + (canvas.height - 180);
+        }
+
+        // Input Bindings (Laptop & Keyboard)
+        window.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = true;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = true;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+            if (e.key === 'Shift') keys.slomo = true;
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.up = false;
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.down = false;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+            if (e.key === 'Shift') keys.slomo = false;
+        });
+
+        // Touch Control Binding Helper
+        function setupTouchBtn(id, keyName) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+            btn.addEventListener('mousedown', () => { keys[keyName] = true; });
+            btn.addEventListener('mouseup', () => { keys[keyName] = false; });
+        }
+        setupTouchBtn('btn-gas', 'up');
+        setupTouchBtn('btn-brake', 'down');
+        setupTouchBtn('btn-left', 'left');
+        setupTouchBtn('btn-right', 'right');
+        setupTouchBtn('btn-slomo', 'slomo');
+
+        // Audio Boost & Mute Buttons
+        let currentBoostIndex = 0;
+        const boostLevels = [2.5, 1.0, 1.5, 2.0];
+        document.getElementById('audio-boost-btn').onclick = () => {
+            currentBoostIndex = (currentBoostIndex + 1) % boostLevels.length;
+            const boost = boostLevels[currentBoostIndex];
+            audioSynth.setGainBoost(boost);
+            document.getElementById('boost-val').innerText = `${boost.toFixed(1)}x`;
+        };
+
+        document.getElementById('mute-btn').onclick = () => {
+            const muted = audioSynth.toggleMute();
+            document.getElementById('mute-btn').innerText = muted ? '🔇' : '🔊';
+        };
+
+        // Custom MP3 File Handler
+        document.getElementById('mp3-file-input').onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                audioSynth.loadCustomMP3(file);
+            }
+        };
+
+        // Game State Transitions
+        document.getElementById('start-game-btn').onclick = startGame;
+        document.getElementById('retry-btn').onclick = startGame;
+
+        function startGame() {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('game-over-modal').classList.add('hidden');
+
+            player.x = 100;
+            player.y = getTerrainY(100) - 30;
+            player.vx = 0;
+            player.vy = 0;
+            player.angle = 0;
+            player.angularVelocity = 0;
+
+            score = 0;
+            startTime = Date.now();
+            gameState = 'PLAYING';
+
+            audioSynth.start();
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            audioSynth.stop();
+            document.getElementById('final-score-val').innerText = Math.floor(score);
+            document.getElementById('game-over-modal').classList.remove('hidden');
+        }
+
+        /* --- 4. MAIN PHYSICS & ANIMATION LOOP --- */
+        function updatePhysics() {
+            if (gameState !== 'PLAYING') return;
+
+            // Time & Score Updates
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+            document.getElementById('time-val').innerText = `${elapsedTime}s`;
+
+            // Slow Motion Factor
+            isSlowMo = keys.slomo;
+            const dt = isSlowMo ? 0.35 : 1.0;
+
+            // Physical Forces
+            const gravity = 0.28 * dt;
+            const friction = 0.985;
+
+            player.vy += gravity;
+
+            // Gas / Acceleration
+            if (keys.up) {
+                player.vx += Math.cos(player.angle) * selectedBike.accel * dt;
+                player.vy += Math.sin(player.angle) * selectedBike.accel * dt;
+            }
+            // Brake
+            if (keys.down) {
+                player.vx *= 0.94;
+            }
+            // Rotation Air Controls
+            if (keys.left) {
+                player.angularVelocity -= selectedBike.rotSpeed * dt;
+            }
+            if (keys.right) {
+                player.angularVelocity += selectedBike.rotSpeed * dt;
+            }
+
+            // Apply Motion
+            player.x += player.vx * dt;
+            player.y += player.vy * dt;
+            player.angle += player.angularVelocity * dt;
+
+            player.vx *= friction;
+            player.vy *= friction;
+            player.angularVelocity *= 0.92;
+
+            // Terrain Collision Logic
+            const terrainY = getTerrainY(player.x);
+            if (player.y >= terrainY - 18) {
+                player.y = terrainY - 18;
+                player.vy = 0;
+                player.grounded = true;
+
+                // Crash detection if angle is severely upside-down on impact
+                const normAngle = Math.abs(player.angle % (Math.PI * 2));
+                if (normAngle > Math.PI * 0.65 && normAngle < Math.PI * 1.35) {
+                    triggerGameOver();
+                }
+            } else {
+                player.grounded = false;
+            }
+
+            // Cap max speed
+            if (player.vx > selectedBike.maxSpeed) player.vx = selectedBike.maxSpeed;
+
+            // Score based on distance
+            score = Math.max(score, Math.floor(player.x / 10));
+            document.getElementById('score-val').innerText = score;
+        }
+
+        function renderFrame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            // Smooth Camera Follow
+            ctx.translate(-player.x + canvas.width * 0.3, 0);
+
+            // Draw Terrain Fill
+            ctx.beginPath();
+            ctx.fillStyle = '#0f172a';
+            ctx.moveTo(player.x - canvas.width, canvas.height);
+            for (let x = player.x - canvas.width; x < player.x + canvas.width; x += 15) {
+                ctx.lineTo(x, getTerrainY(x));
+            }
+            ctx.lineTo(player.x + canvas.width, canvas.height);
+            ctx.fill();
+
+            // Draw Terrain Surface Line
+            ctx.beginPath();
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 5;
+            for (let x = player.x - canvas.width; x < player.x + canvas.width; x += 15) {
+                ctx.lineTo(x, getTerrainY(x));
+            }
+            ctx.stroke();
+
+            // Draw Motorbike & Rider
+            if (gameState === 'PLAYING') {
+                ctx.save();
+                ctx.translate(player.x, player.y);
+                ctx.rotate(player.angle);
+
+                // Body Frame
+                ctx.fillStyle = selectedBike.color;
+                ctx.fillRect(-16, -10, 32, 10);
+
+                // Wheels
+                ctx.fillStyle = '#1e293b';
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 2;
+
+                // Back Wheel
+                ctx.beginPath();
+                ctx.arc(-16, 6, 9, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Front Wheel
+                ctx.beginPath();
+                ctx.arc(16, 6, 9, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Rider Model
+                ctx.fillStyle = '#f8fafc';
+                ctx.beginPath();
+                ctx.arc(0, -18, 7, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+        // Animation Loop
+        function gameLoop() {
+            updatePhysics();
+            renderFrame();
+            request
